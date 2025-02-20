@@ -11,6 +11,4 @@ Instructions
 Run and test example:
 python3 main_linear.py
 
-Please run the main file with dataset name to check the results for different datasets.
-
-All the parameters are in args folder. 
+第一次修改：rootad.py，以及main_linear.py中实现了窗口因果图的可视化，并且在rootad.py中增加了一个强制下三角函数。
