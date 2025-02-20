@@ -554,12 +554,12 @@ class RootAD(nn.Module):
         print('Decoder F1: {:.5f} std: {:.5f}'.format(np.mean(decoder_f1), np.std(decoder_f1)))
         return encoder_causal_struct_estimate_lst, decoder_causal_struct_estimate_lst
 
-    def generate_causal_graph(self, causal_matrix, filename,threshold=0.4, figsize=(8,6), 
-                            positive_color='limegreen', negative_color='tomato',
-                            node_colors=('skyblue', 'lightgreen'), show_labels=True,
+    def generate_causal_graph(self, causal_matrix, filename, threshold=0.4, figsize=(10,8), 
+                            positive_color='#2ecc71', negative_color='#e74c3c',
+                            node_color='#3498db', show_labels=True,
                             title="Causal Graph with Absolute Threshold"):
         """
-        生成带权重的一步时延因果图
+        生成优化后的一步时延因果图
         
         参数：
         causal_matrix   : list of lists 下三角权重矩阵
@@ -567,9 +567,9 @@ class RootAD(nn.Module):
         figsize         : tuple 图像尺寸
         positive_color  : str 正向影响边颜色
         negative_color  : str 负向影响边颜色
-        node_colors     : tuple (t-1时刻节点颜色, t时刻节点颜色)
+        node_color      : str 节点颜色（统一使用浅蓝色）
         show_labels     : bool 是否显示权重标签
-        title           : str 图像标题
+        title          : str 图像标题
         """
         # 参数校验
         assert all(len(row) == len(causal_matrix) for row in causal_matrix), "必须为方阵"
@@ -579,38 +579,52 @@ class RootAD(nn.Module):
         N = len(causal_matrix)
         G = nx.DiGraph()
 
-        # 生成节点
-        t_minus_1_nodes = [f'X{i}_t-1' for i in range(N)]
-        t_nodes = [f'X{i}_t' for i in range(N)]
+        # 找出有效节点（有边相连的节点）
+        active_nodes = set()
+        for target in range(N):
+            for source in range(N):
+                weight = causal_matrix[target][source]
+                if abs(weight) > threshold:
+                    active_nodes.add(source)
+                    active_nodes.add(target)
+
+        # 只添加有效节点
+        t_minus_1_nodes = [f'X{i}_t-1' for i in active_nodes]
+        t_nodes = [f'X{i}_t' for i in active_nodes]
         G.add_nodes_from(t_minus_1_nodes + t_nodes)
 
         # 添加边
         edges = []
-        for target in range(N):
-            for source in range(N):
+        for target in active_nodes:
+            for source in active_nodes:
                 weight = causal_matrix[target][source]
                 if abs(weight) > threshold:
                     edges.append((
                         f'X{source}_t-1',
                         f'X{target}_t',
-                        {'weight': round(weight, 2)}
+                        {'weight': round(weight, 3)}
                     ))
         G.add_edges_from(edges)
 
-        # 设置布局
+        # 优化节点布局
+        active_list = sorted(list(active_nodes))
         pos = {
-            **{f'X{i}_t-1': (0, N-1-i) for i in range(N)},
-            **{f'X{i}_t': (2, N-1-i) for i in range(N)}
+            **{f'X{i}_t-1': (0, len(active_list)-1-active_list.index(i)) 
+               for i in active_nodes},
+            **{f'X{i}_t': (2, len(active_list)-1-active_list.index(i)) 
+               for i in active_nodes}
         }
 
         # 绘图
-        plt.figure(figsize=figsize)
+        plt.figure(figsize=figsize, dpi=100)
         
         # 绘制节点
         nx.draw_networkx_nodes(
             G, pos,
-            node_size=200,
-            node_color=[node_colors[0]]*N + [node_colors[1]]*N
+            node_size=600,  # 增大节点大小以容纳文字
+            node_color=[node_color] * (len(active_nodes) * 2),  # 统一使用浅蓝色
+            edgecolors='white',  # 添加白色边框
+            linewidths=1
         )
         
         # 绘制边
@@ -624,25 +638,32 @@ class RootAD(nn.Module):
             G, pos,
             edgelist=edge_data,
             edge_color=edge_colors,
-            width=2,
-            arrowsize=20
+            width=1.5,  # 统一线条粗细
+            arrowsize=10,  # 减小箭头大小
+            alpha=0.7,
+            min_source_margin=20,
+            min_target_margin=20
         )
         
         # 添加标签
-        nx.draw_networkx_labels(G, pos, font_size=10)
+        nx.draw_networkx_labels(G, pos, font_size=8, font_weight='normal')  # 减小字体大小，使用普通字重
         if show_labels:
-            edge_labels = {(u, v): d['weight'] for u, v, d in edge_data}
+            edge_labels = {(u, v): f'{d["weight"]:+.2f}' for u, v, d in edge_data}
             nx.draw_networkx_edge_labels(
                 G, pos,
                 edge_labels=edge_labels,
-                font_size=8,
-                label_pos=0.5
+                font_size=10,  # 减小边标签字体大小
+                label_pos=0.5,
+                bbox=dict(facecolor='white', edgecolor='none', alpha=0.7)
             )
         
-        plt.title(title + f"\n(Threshold: |weight| >{threshold})", fontsize=12)
-        plt.savefig(filename)
+        plt.title(title + f"\n(Threshold: |weight| > {threshold})", fontsize=12, pad=20)
         plt.axis('off')
-
+        plt.tight_layout()
+        
+        # 保存图片
+        plt.savefig(filename, bbox_inches='tight', dpi=300)
+        plt.close()
         
         return G, plt.gcf()
 
