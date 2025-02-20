@@ -32,7 +32,7 @@ def args_parser():
     parser.add_argument('--decoder_lambda', type=float, default=0.5)
     parser.add_argument('--beta', type=float, default=0.5)
     parser.add_argument('--lr', type=float, default=0.0001)
-    parser.add_argument('--epochs', type=int, default=50)   #default=1000
+    parser.add_argument('--epochs', type=int, default=2000)   #default=1000
     parser.add_argument('--hidden_layer_size', type=int, default=50)
     parser.add_argument('--num_hidden_layers', type=int, default=1)
     parser.add_argument('--recon_threshold', type=float, default=0.95)

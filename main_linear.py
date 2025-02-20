@@ -15,7 +15,7 @@ def main(argv):
         os.makedirs(logging_dir)
 
     # Full path for the log file
-    log_file_path = os.path.join(logging_dir, 'linear.log')
+    log_file_path = os.path.join(logging_dir, 'mydata_10_26.log')
     # Set up logging
     logging.basicConfig(filename=log_file_path,
                     filemode='w', # Append mode (use 'w' for write mode)
@@ -83,12 +83,16 @@ def main(argv):
 
     print('done')
     print("True causal graph:")
-    _, fig1 = rootad_model.generate_causal_graph(data_class.data_dict['causal_struct'], "true_causal_graph.png")
+    _, fig1 = rootad_model.generate_causal_graph(data_class.data_dict['causal_struct_value'], "true_causal_graph.png")
     # plt.savefig("true_causal_graph.png")
     # plt.close()
+    print("True causal_struct_value:")
+    print(data_class.data_dict['causal_struct_value'])
     
     # 将encA[9]转换为下三角矩阵 
     encA_lower = rootad_model.make_lower_triangular(encA[9])
+    print("pred causal_struct_value:")
+    print(encA_lower)
     print("pred causal graph:")
     _, fig2 = rootad_model.generate_causal_graph(encA_lower, "pred_causal_graph.png")
     # plt.savefig("pred_causal_graph.png")
