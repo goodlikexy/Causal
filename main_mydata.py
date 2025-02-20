@@ -30,7 +30,7 @@ def main(argv):
     logging.info('Seed: {}'.format(options['seed']))
 
     # 加载正常数据
-    data_path = '/home/hz/projects/AERCA/datasets/data_10_26/test_d/data_processed/normal_segments_merged.npy'
+    data_path = '/home/hz/projects/AERCA/datasets/data_10_26/test_d/data_processed/normal_segments.npy'
     normal_data = np.load(data_path)
     print("数据形状:", normal_data.shape)  # (n, 50, features)
 

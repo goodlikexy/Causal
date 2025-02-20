@@ -554,7 +554,7 @@ class RootAD(nn.Module):
         print('Decoder F1: {:.5f} std: {:.5f}'.format(np.mean(decoder_f1), np.std(decoder_f1)))
         return encoder_causal_struct_estimate_lst, decoder_causal_struct_estimate_lst
 
-    def generate_causal_graph(self, causal_matrix, filename, threshold=0.4, figsize=(10,8), 
+    def generate_causal_graph(self, causal_matrix, filename, threshold=0.1, figsize=(10,8), 
                             positive_color='#2ecc71', negative_color='#e74c3c',
                             node_color='#3498db', show_labels=True,
                             title="Causal Graph with Absolute Threshold"):
