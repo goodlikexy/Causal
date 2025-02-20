@@ -486,8 +486,9 @@ class RootAD(nn.Module):
         with torch.no_grad():
             for x in xs:
                 loss, nexts_hat, nexts, encoder_coeffs, decoder_coeffs, kl_div, _, _ = self._testing_step(x)
-                encoder_causal_struct_estimate_temp = torch.max(torch.median(torch.abs(encoder_coeffs), dim=0)[0], dim=0).values.cpu().numpy()
-                decoder_causal_struct_estimate_temp = torch.max(torch.median(torch.abs(decoder_coeffs), dim=0)[0], dim=0).values.cpu().numpy()
+                #这里修改了删除了abs绝对值
+                encoder_causal_struct_estimate_temp = torch.max(torch.median(encoder_coeffs, dim=0)[0], dim=0).values.cpu().numpy()#torch.median(torch.abs(encoder_coeffs), dim=0)[0]
+                decoder_causal_struct_estimate_temp = torch.max(torch.median(decoder_coeffs, dim=0)[0], dim=0).values.cpu().numpy()#torch.median(torch.abs(decoder_coeffs), dim=0)[0]
                 encoder_causal_struct_estimate_lst = np.append(encoder_causal_struct_estimate_lst, encoder_causal_struct_estimate_temp)
                 decoder_causal_struct_estimate_lst = np.append(decoder_causal_struct_estimate_lst, decoder_causal_struct_estimate_temp)
         encoder_causal_struct_estimate_lst = encoder_causal_struct_estimate_lst.reshape(-1, self.num_vars, self.num_vars)
@@ -553,7 +554,7 @@ class RootAD(nn.Module):
         print('Decoder F1: {:.5f} std: {:.5f}'.format(np.mean(decoder_f1), np.std(decoder_f1)))
         return encoder_causal_struct_estimate_lst, decoder_causal_struct_estimate_lst
 
-    def generate_causal_graph(self, causal_matrix, filename,threshold=0.1, figsize=(8,6), 
+    def generate_causal_graph(self, causal_matrix, filename,threshold=0.4, figsize=(8,6), 
                             positive_color='limegreen', negative_color='tomato',
                             node_colors=('skyblue', 'lightgreen'), show_labels=True,
                             title="Causal Graph with Absolute Threshold"):
@@ -608,7 +609,7 @@ class RootAD(nn.Module):
         # 绘制节点
         nx.draw_networkx_nodes(
             G, pos,
-            node_size=800,
+            node_size=200,
             node_color=[node_colors[0]]*N + [node_colors[1]]*N
         )
         
