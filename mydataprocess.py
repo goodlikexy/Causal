@@ -84,6 +84,9 @@ class DataProcessor:
             extracted_rows.to_csv(filename, index=False)
             print(f"提取的最长行异常数据已保存到 '{filename}'")
 
+
+
+
     #过滤所有单跳指标中的正常指标
     def filter_normal_metric(self, segment_file, label_file, start, end):
         """
@@ -248,9 +251,12 @@ class DataProcessor:
 
 
 # 使用示例
-input_file = '/home/hz/projects/AERCA/datasets/data_10_26/test_d/data/merged_output_normalized_2.csv'
-output_dir = f'/home/hz/projects/AERCA/datasets/data_10_26/test_d/data_processed'
-label_file = '/home/hz/projects/AERCA/datasets/data_10_26/10_26_anomaly_res/duodian/label_d_2.csv'
+input_file = '/home/hz/projects/AERCA/datasets/data_10_26/test_l/data/merged_output_normalized_2.csv'
+output_dir = f'/home/hz/projects/AERCA/datasets/data_10_26/test_l/data_processed'
+label_file = '/home/hz/projects/AERCA/datasets/data_10_26/10_26_anomaly_res/duodian/label_l_2.csv'
+
+
+
 
 
 

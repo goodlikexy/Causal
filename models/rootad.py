@@ -10,6 +10,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score, confusion_ma
 from tqdm import tqdm
 import networkx as nx
 import matplotlib.pyplot as plt
+import os
 
 # import networkx as nx
 # import matplotlib.pyplot as plt
@@ -554,23 +555,52 @@ class RootAD(nn.Module):
         print('Decoder F1: {:.5f} std: {:.5f}'.format(np.mean(decoder_f1), np.std(decoder_f1)))
         return encoder_causal_struct_estimate_lst, decoder_causal_struct_estimate_lst
 
-    def generate_causal_graph(self, causal_matrix, filename, threshold=0.1, figsize=(10,8), 
-                            positive_color='#2ecc71', negative_color='#e74c3c',
-                            node_color='#3498db', show_labels=True,
-                            title="Causal Graph with Absolute Threshold"):
+    def load_feature_mapping(self, mapping_file):
+        """
+        加载特征映射文件
+        Args:
+            mapping_file: 特征映射文件路径
+        Returns:
+            dict: 特征映射字典
+        """
+        feature_mapping = {}
+        try:
+            with open(mapping_file, 'r') as f:
+                for line in f:
+                    x_name, original_name = line.strip().split('\t')
+                    feature_mapping[x_name] = original_name
+            print("加载特征映射成功:")
+            for x_name, original_name in feature_mapping.items():
+                print(f"{x_name} -> {original_name}")
+        except Exception as e:
+            print(f"加载特征映射失败: {e}")
+            feature_mapping = None
+        return feature_mapping
+
+    def generate_causal_graph(self, causal_matrix, filename, output_dir=None, threshold=0.1, figsize=(10,8), 
+                             positive_color='#2ecc71', negative_color='#e74c3c',
+                             node_color='#3498db', show_labels=True,
+                             title="Causal Graph with Absolute Threshold"):
         """
         生成优化后的一步时延因果图
-        
-        参数：
-        causal_matrix   : list of lists 下三角权重矩阵
-        threshold       : float 边创建阈值（绝对值）
-        figsize         : tuple 图像尺寸
-        positive_color  : str 正向影响边颜色
-        negative_color  : str 负向影响边颜色
-        node_color      : str 节点颜色（统一使用浅蓝色）
-        show_labels     : bool 是否显示权重标签
-        title          : str 图像标题
+        Args:
+            causal_matrix: 因果矩阵
+            filename: 输出文件名
+            output_dir: 数据处理输出目录，包含feature_mapping.txt
+            threshold: 阈值
+            ...其他参数保持不变...
         """
+        # 尝试加载特征映射
+        if output_dir is None:
+            output_dir = '/home/hz/projects/AERCA/datasets/data_10_26/test_d/data_processed'
+        
+        mapping_file = os.path.join(output_dir, 'feature_mapping.txt')
+        feature_mapping = self.load_feature_mapping(mapping_file)
+        
+        # 如果没有找到映射文件，使用默认的X0, X1等
+        if feature_mapping is None:
+            feature_mapping = {f'X{i}': f'X{i}' for i in range(len(causal_matrix))}
+        
         # 参数校验
         assert all(len(row) == len(causal_matrix) for row in causal_matrix), "必须为方阵"
         assert all(causal_matrix[i][j] == 0 for i in range(len(causal_matrix)) 
@@ -588,9 +618,9 @@ class RootAD(nn.Module):
                     active_nodes.add(source)
                     active_nodes.add(target)
 
-        # 只添加有效节点
-        t_minus_1_nodes = [f'X{i}_t-1' for i in active_nodes]
-        t_nodes = [f'X{i}_t' for i in active_nodes]
+        # 使用原始特征名称创建节点
+        t_minus_1_nodes = [f'{feature_mapping[f"X{i}"]}_t-1' for i in active_nodes]
+        t_nodes = [f'{feature_mapping[f"X{i}"]}_t' for i in active_nodes]
         G.add_nodes_from(t_minus_1_nodes + t_nodes)
 
         # 添加边
@@ -600,8 +630,8 @@ class RootAD(nn.Module):
                 weight = causal_matrix[target][source]
                 if abs(weight) > threshold:
                     edges.append((
-                        f'X{source}_t-1',
-                        f'X{target}_t',
+                        f'{feature_mapping[f"X{source}"]}_t-1',
+                        f'{feature_mapping[f"X{target}"]}_t',
                         {'weight': round(weight, 3)}
                     ))
         G.add_edges_from(edges)
@@ -609,25 +639,23 @@ class RootAD(nn.Module):
         # 优化节点布局
         active_list = sorted(list(active_nodes))
         pos = {
-            **{f'X{i}_t-1': (0, len(active_list)-1-active_list.index(i)) 
+            **{f'{feature_mapping[f"X{i}"]}_t-1': (0, len(active_list)-1-active_list.index(i)) 
                for i in active_nodes},
-            **{f'X{i}_t': (2, len(active_list)-1-active_list.index(i)) 
+            **{f'{feature_mapping[f"X{i}"]}_t': (2, len(active_list)-1-active_list.index(i)) 
                for i in active_nodes}
         }
 
         # 绘图
         plt.figure(figsize=figsize, dpi=100)
         
-        # 绘制节点
         nx.draw_networkx_nodes(
             G, pos,
-            node_size=600,  # 增大节点大小以容纳文字
-            node_color=[node_color] * (len(active_nodes) * 2),  # 统一使用浅蓝色
-            edgecolors='white',  # 添加白色边框
+            node_size=1000,  # 增大节点大小以适应更长的文字
+            node_color=[node_color] * (len(active_nodes) * 2),
+            edgecolors='white',
             linewidths=1
         )
         
-        # 绘制边
         edge_data = G.edges(data=True)
         edge_colors = []
         for u, v, d in edge_data:
@@ -638,21 +666,21 @@ class RootAD(nn.Module):
             G, pos,
             edgelist=edge_data,
             edge_color=edge_colors,
-            width=1.5,  # 统一线条粗细
-            arrowsize=10,  # 减小箭头大小
+            width=1.5,
+            arrowsize=10,
             alpha=0.7,
             min_source_margin=20,
             min_target_margin=20
         )
         
-        # 添加标签
-        nx.draw_networkx_labels(G, pos, font_size=8, font_weight='normal')  # 减小字体大小，使用普通字重
+        # 使用更小的字体以适应更长的文字
+        nx.draw_networkx_labels(G, pos, font_size=10, font_weight='normal')
         if show_labels:
             edge_labels = {(u, v): f'{d["weight"]:+.2f}' for u, v, d in edge_data}
             nx.draw_networkx_edge_labels(
                 G, pos,
                 edge_labels=edge_labels,
-                font_size=10,  # 减小边标签字体大小
+                font_size=8,
                 label_pos=0.5,
                 bbox=dict(facecolor='white', edgecolor='none', alpha=0.7)
             )
@@ -661,7 +689,6 @@ class RootAD(nn.Module):
         plt.axis('off')
         plt.tight_layout()
         
-        # 保存图片
         plt.savefig(filename, bbox_inches='tight', dpi=300)
         plt.close()
         
@@ -689,3 +716,51 @@ class RootAD(nn.Module):
             result[np.triu_indices(result.shape[0], k=1)] = 0
             
         return result
+
+    def localize_root_causes(self, anomaly_data, threshold=0.95):
+        """
+        对异常数据进行根因定位
+        
+        Args:
+            anomaly_data: numpy array, 异常数据
+            threshold: float, 根因判定阈值
+        
+        Returns:
+            dict: 每个时间点的根因及其异常分数
+        """
+        self.eval()  # 设置为评估模式
+        with torch.no_grad():
+            # 将数据转换为tensor
+            anomaly_tensor = torch.tensor(anomaly_data).float().to(self.device)
+            
+            # 获取重构误差和因果系数
+            recon, nexts, enc_coeffs, dec_coeffs, prev_coeffs, _, _ = self.forward(anomaly_tensor)
+            
+            # 计算重构误差
+            recon_errors = self.mse_loss_wo_reduction(recon, nexts)
+            recon_errors = recon_errors.cpu().numpy()
+            
+            # 获取因果系数
+            enc_coeffs = enc_coeffs.cpu().numpy()
+            dec_coeffs = dec_coeffs.cpu().numpy()
+            
+            # 存储根因结果
+            root_causes = {}
+            
+            # 对每个时间点进行分析
+            for t in range(len(recon_errors)):
+                # 计算特征的异常分数
+                feature_scores = {}
+                for i in range(self.num_vars):
+                    # 结合重构误差和因果系数
+                    score = recon_errors[t][i] * (np.abs(enc_coeffs[t, :, i]).mean() + 
+                                                np.abs(dec_coeffs[t, :, i]).mean())
+                    feature_scores[i] = score
+                
+                # 根据阈值筛选根因
+                max_score = max(feature_scores.values())
+                threshold_score = max_score * threshold
+                root_causes[t] = {k: v for k, v in feature_scores.items() 
+                                if v >= threshold_score}
+            
+            return root_causes

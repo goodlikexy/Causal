@@ -100,13 +100,106 @@ def main(argv):
     if len(decA) > 99:
         print("A[99]:\n", decA[99])
 
-    # 生成真实因果图和预测因果图
+    # 加载异常数据
+    anomaly_data_path = '/home/hz/projects/AERCA/datasets/data_10_26/test_d/data_processed/root_cause_segment.npy'
+    anomaly_data = np.load(anomaly_data_path)
+    print("异常数据形状:", anomaly_data.shape)  # (1, x, features)
+
+    # # 修改根因定位部分
+    # print("\n开始根因定位...")
+    # # 将数据转换为列表格式
+    # xs = [anomaly_data[0]]  # 转换为列表，每个元素是(x, features)的数组
+    
+    # # 修改标签创建方式：创建混合的标签（部分正常，部分异常）
+    # label = np.zeros((anomaly_data.shape[1], anomaly_data.shape[2]))
+    # # 将中间部分标记为异常（假设异常发生在中间段）
+    # mid_start = anomaly_data.shape[1] // 4
+    # mid_end = mid_start * 3
+    # label[mid_start:mid_end, :] = 1
+    # labels = [label]  # 转换为列表格式
+    
+    # try:
+    #     # 使用_testing_root_cause进行根因定位
+    #     root_causes = rootad_model._testing_root_cause(xs, labels)
+        
+    #     # 打印根因定位结果
+    #     print("\n根因定位结果:")
+    #     feature_mapping = rootad_model.load_feature_mapping(os.path.join(output_dir, 'feature_mapping.txt'))
+        
+    #     # 解析并显示结果
+    #     for t, causes in enumerate(root_causes):
+    #         if causes:  # 如果在该时间点检测到根因
+    #             print(f"\n时间点 {t}:")
+    #             for cause in causes:
+    #                 feature_name = feature_mapping[f'X{cause}']
+    #                 print(f"  根因特征: {feature_name}")
+    # except Exception as e:
+    #     print(f"根因定位过程出错: {e}")
+    #     print("请检查数据和标签的分布情况")
+
+
+    # 修改根因定位部分
+    print("\n开始根因定位...")
+    # 将数据转换为列表格式
+    xs = [anomaly_data[0]]  # 转换为列表，每个元素是(x, features)的数组
+    
+    # 修改标签创建方式：创建混合的标签
+    label = np.zeros((anomaly_data.shape[1], anomaly_data.shape[2]))
+    mid_start = anomaly_data.shape[1] // 4
+    mid_end = mid_start * 3
+    label[mid_start:mid_end, :] = 1
+    labels = [label]
+    
+    try:
+        # 使用_testing_root_cause进行根因定位
+        pred_labels = rootad_model._testing_root_cause(xs, labels)
+        
+        print("\n=== 详细的根因定位结果 ===")
+        print(f"预测标签形状: {pred_labels.shape}")
+        print(f"预测标签类型: {type(pred_labels)}")
+        print("\n检测到的异常:")
+        
+        # 处理一维数组输出
+        num_features = anomaly_data.shape[2]  # 特征数量
+        
+        # 遍历预测标签
+        for i, is_anomaly in enumerate(pred_labels):
+            if is_anomaly:
+                # 计算对应的时间点和特征
+                time_step = i // num_features  # 行（时间点）
+                feature_idx = i % num_features  # 列（特征）
+                
+                print(f"\n时间点(行) {time_step}, 特征(列) {feature_idx}:")
+                value = xs[0][time_step][feature_idx]
+                print(f"  异常值: {value:.4f}")
+        
+    except Exception as e:
+        print(f"根因定位过程出错: {e}")
+        print(f"错误类型: {type(e)}")
+        import traceback
+        print(f"详细错误信息: {traceback.format_exc()}")
+
+    # 生成因果图
     print("\n生成因果图...")
-    _, fig1 = rootad_model.generate_causal_graph(true_causal_struct, "true_causal_graph.png")
+    output_dir = '/home/hz/projects/AERCA/datasets/data_10_26/test_d/data_processed'
+
+    # 生成真实因果图
+    _, fig1 = rootad_model.generate_causal_graph(
+        true_causal_struct, 
+        os.path.join(output_dir, "true_causal_graph.png"),
+        output_dir=output_dir,
+        title="True Causal Graph"
+    )
     print("真实因果图已保存")
 
+    # 生成预测因果图
     encA_lower = rootad_model.make_lower_triangular(encA[min(9, len(encA)-1)])
-    _, fig2 = rootad_model.generate_causal_graph(encA_lower, "pred_causal_graph.png")
+    _, fig2 = rootad_model.generate_causal_graph(
+        encA_lower, 
+        os.path.join(output_dir, "pred_causal_graph.png"),
+        output_dir=output_dir,
+        title="Predicted Causal Graph"
+    )
     print("预测因果图已保存")
 
 if __name__ == '__main__':
