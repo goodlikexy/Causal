@@ -156,28 +156,48 @@ def main(argv):
         
         print("\n=== 详细的根因定位结果 ===")
         print(f"预测标签形状: {pred_labels.shape}")
-        print(f"预测标签类型: {type(pred_labels)}")
-        print("\n检测到的异常:")
+        print(f"时间点数: {anomaly_data.shape[1]}")
+        print(f"特征数: {anomaly_data.shape[2]}")
         
         # 处理一维数组输出
         num_features = anomaly_data.shape[2]  # 特征数量
         
-        # 遍历预测标签
+        # 找出最早的异常时间点
+        anomaly_points = []
         for i, is_anomaly in enumerate(pred_labels):
             if is_anomaly:
-                # 计算对应的时间点和特征
-                time_step = i // num_features  # 行（时间点）
-                feature_idx = i % num_features  # 列（特征）
-                
-                print(f"\n时间点(行) {time_step}, 特征(列) {feature_idx}:")
-                value = xs[0][time_step][feature_idx]
-                print(f"  异常值: {value:.4f}")
+                time_step = i // num_features
+                feature_idx = i % num_features
+                anomaly_points.append((time_step, feature_idx))
+        
+        if anomaly_points:
+            # 按时间排序
+            anomaly_points.sort(key=lambda x: x[0])
+            
+            # 获取最早的时间点
+            first_time = anomaly_points[0][0]
+            
+            # 输出根因（最早时间点的所有异常特征）
+            print("\n=== 根因（最早异常时间点）===")
+            print(f"时间点: {first_time}")
+            for time, feature in anomaly_points:
+                if time == first_time:
+                    value = xs[0][time][feature]
+                    print(f"特征 {feature}: {value:.4f}")
+            
+            # 输出其他异常点
+            print("\n=== 其他异常点 ===")
+            print("格式：[时间点, 特征] = 值")
+            for time, feature in anomaly_points:
+                if time > first_time:  # 跳过根因时间点
+                    value = xs[0][time][feature]
+                    print(f"[{time}, {feature}] = {value:.4f}")
+        else:
+            print("\n未检测到异常")
         
     except Exception as e:
         print(f"根因定位过程出错: {e}")
         print(f"错误类型: {type(e)}")
-        import traceback
-        print(f"详细错误信息: {traceback.format_exc()}")
 
     # 生成因果图
     print("\n生成因果图...")
