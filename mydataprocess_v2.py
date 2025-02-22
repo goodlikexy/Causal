@@ -160,10 +160,23 @@ class AnomalyDataProcessor:
 
     def create_npy_files(self, root_cause_data, normal_segments, selected_cols, window_size=50):
         """
-        创建NPY文件
+        创建NPY文件和特征映射文件，同时保存根因时间戳
         """
-        # 只使用实际存在于root_cause_data中的列，并排除Time列
+        # 只使用实际存在于root_cause_data中的列，并分开处理Time列
         available_cols = [col for col in root_cause_data.columns if col != 'Time']
+        timestamps = root_cause_data['Time'].values  # 保存根因片段的时间戳
+        
+        # 创建特征映射并保存
+        feature_mapping = {f'X{i}': col for i, col in enumerate(available_cols)}
+        mapping_file = os.path.join(self.output_dir, 'feature_mapping.txt')
+        with open(mapping_file, 'w') as f:
+            for x_name, original_name in feature_mapping.items():
+                f.write(f"{x_name}\t{original_name}\n")
+        
+        print("\n特征映射关系:")
+        for x_name, original_name in feature_mapping.items():
+            print(f"{x_name} -> {original_name}")
+        print(f"特征映射已保存到: {mapping_file}")
         
         # 处理根因片段
         root_cause_array = root_cause_data[available_cols].values
@@ -177,7 +190,6 @@ class AnomalyDataProcessor:
             for i in range(num_windows):
                 window_start = start + i * window_size
                 window_end = window_start + window_size
-                # 使用相同的列，排除Time列
                 window_data = self.data_df.iloc[window_start:window_end][available_cols].values
                 normal_windows.append(window_data)
         
@@ -186,18 +198,25 @@ class AnomalyDataProcessor:
         # 保存为npy文件
         np.save(f"{self.output_dir}/root_cause_segment.npy", root_cause_array)
         np.save(f"{self.output_dir}/normal_segments.npy", normal_array)
+        np.save(f"{self.output_dir}/root_cause_timestamps.npy", timestamps)  # 保存根因片段的时间戳
         
         print(f"\n使用的特征列: {available_cols}")
         print(f"根因片段数据已保存，形状: {root_cause_array.shape}")
+        print(f"根因片段时间戳已保存，形状: {timestamps.shape}")
         print(f"正常片段数据已保存，形状: {normal_array.shape}")
         print(f"保存路径: {self.output_dir}")
         
         # 验证保存的数据
         loaded_root_cause = np.load(f"{self.output_dir}/root_cause_segment.npy")
         loaded_normal = np.load(f"{self.output_dir}/normal_segments.npy")
+        loaded_timestamps = np.load(f"{self.output_dir}/root_cause_timestamps.npy")
+        
         print("\n验证加载的数据形状:")
         print(f"加载的根因片段形状: {loaded_root_cause.shape}")
         print(f"加载的正常片段形状: {loaded_normal.shape}")
+        print(f"加载的根因时间戳形状: {loaded_timestamps.shape}")
+        
+        return feature_mapping
 
 def main():
     # 设置路径
