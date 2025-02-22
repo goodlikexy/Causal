@@ -105,39 +105,6 @@ def main(argv):
     anomaly_data = np.load(anomaly_data_path)
     print("异常数据形状:", anomaly_data.shape)  # (1, x, features)
 
-    # # 修改根因定位部分
-    # print("\n开始根因定位...")
-    # # 将数据转换为列表格式
-    # xs = [anomaly_data[0]]  # 转换为列表，每个元素是(x, features)的数组
-    
-    # # 修改标签创建方式：创建混合的标签（部分正常，部分异常）
-    # label = np.zeros((anomaly_data.shape[1], anomaly_data.shape[2]))
-    # # 将中间部分标记为异常（假设异常发生在中间段）
-    # mid_start = anomaly_data.shape[1] // 4
-    # mid_end = mid_start * 3
-    # label[mid_start:mid_end, :] = 1
-    # labels = [label]  # 转换为列表格式
-    
-    # try:
-    #     # 使用_testing_root_cause进行根因定位
-    #     root_causes = rootad_model._testing_root_cause(xs, labels)
-        
-    #     # 打印根因定位结果
-    #     print("\n根因定位结果:")
-    #     feature_mapping = rootad_model.load_feature_mapping(os.path.join(output_dir, 'feature_mapping.txt'))
-        
-    #     # 解析并显示结果
-    #     for t, causes in enumerate(root_causes):
-    #         if causes:  # 如果在该时间点检测到根因
-    #             print(f"\n时间点 {t}:")
-    #             for cause in causes:
-    #                 feature_name = feature_mapping[f'X{cause}']
-    #                 print(f"  根因特征: {feature_name}")
-    # except Exception as e:
-    #     print(f"根因定位过程出错: {e}")
-    #     print("请检查数据和标签的分布情况")
-
-
     # 修改根因定位部分
     print("\n开始根因定位...")
     # 将数据转换为列表格式
@@ -151,6 +118,9 @@ def main(argv):
     labels = [label]
     
     try:
+        # 定义输出目录
+        output_dir = '/home/hz/projects/AERCA/datasets/data_10_26/test_d/data_processed'
+        
         # 使用_testing_root_cause进行根因定位
         pred_labels = rootad_model._testing_root_cause(xs, labels)
         
@@ -158,6 +128,18 @@ def main(argv):
         print(f"预测标签形状: {pred_labels.shape}")
         print(f"时间点数: {anomaly_data.shape[1]}")
         print(f"特征数: {anomaly_data.shape[2]}")
+        
+        # 加载时间戳
+        timestamps = np.load(os.path.join(output_dir, 'root_cause_timestamps.npy'))
+        
+        # 加载特征映射
+        feature_mapping_path = os.path.join(output_dir, 'feature_mapping.txt')
+        feature_names = {}
+        with open(feature_mapping_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) == 2:
+                    feature_names[parts[0]] = parts[1]
         
         # 处理一维数组输出
         num_features = anomaly_data.shape[2]  # 特征数量
@@ -173,25 +155,48 @@ def main(argv):
         if anomaly_points:
             # 按时间排序
             anomaly_points.sort(key=lambda x: x[0])
-            
-            # 获取最早的时间点
             first_time = anomaly_points[0][0]
             
             # 输出根因（最早时间点的所有异常特征）
             print("\n=== 根因（最早异常时间点）===")
-            print(f"时间点: {first_time}")
+            print(f"时间点: {first_time} (时间戳: {timestamps[first_time]})")
+            
+            # 收集根因时间点的所有特征名称
+            root_cause_features = []
             for time, feature in anomaly_points:
                 if time == first_time:
                     value = xs[0][time][feature]
-                    print(f"特征 {feature}: {value:.4f}")
+                    feature_name = feature_names.get(f'X{feature}', f'未知特征_{feature}')
+                    print(f"特征 {feature} ({feature_name}): {value:.4f}")
+                    root_cause_features.append(feature_name)
+            
+            # 提取共同的指标名称（只保留Delay或Bitrate部分）
+            metrics = set()
+            for feature in root_cause_features:
+                parts = feature.split('_')[0].split('F')  # 先分割下划线，再分割F
+                for part in parts:
+                    if 'Delay' in part:
+                        # 提取FxDelay或SxDelay部分
+                        if part.startswith('1') or part.startswith('2') or part.startswith('3') or part.startswith('4'):
+                            metrics.add(f"F{part}")
+                        elif 'S' in part:
+                            metrics.add(part)
+                    elif 'Bitrate' in part:
+                        if 'S' in part:
+                            metrics.add(part)
+            
+            # 输出根因指标
+            if metrics:
+                print(f"\n根因指标为: {', '.join(sorted(metrics))}")
             
             # 输出其他异常点
             print("\n=== 其他异常点 ===")
-            print("格式：[时间点, 特征] = 值")
+            print("格式：[时间点(时间戳), 特征] = 值")
             for time, feature in anomaly_points:
-                if time > first_time:  # 跳过根因时间点
+                if time > first_time:
                     value = xs[0][time][feature]
-                    print(f"[{time}, {feature}] = {value:.4f}")
+                    feature_name = feature_names.get(f'X{feature}', f'未知特征_{feature}')
+                    print(f"[{time} ({timestamps[time]}), {feature} ({feature_name})] = {value:.4f}")
         else:
             print("\n未检测到异常")
         
@@ -201,7 +206,6 @@ def main(argv):
 
     # 生成因果图
     print("\n生成因果图...")
-    output_dir = '/home/hz/projects/AERCA/datasets/data_10_26/test_d/data_processed'
 
     # 生成真实因果图
     _, fig1 = rootad_model.generate_causal_graph(
